@@ -5,56 +5,139 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  // CORS headers
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+
+  // Обрабатываем preflight запрос
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
   }
 
-  try {
-    const { query } = req.body;
-
-    if (!query) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Введите запрос для поиска одежды' 
+  // 🔥 ОБРАБОТКА GET ЗАПРОСОВ
+  if (req.method === 'GET') {
+    try {
+      // Если есть query параметр, выполняем поиск
+      const { query, test } = req.query;
+      
+      if (test === 'true') {
+        // Тестовый режим - возвращаем демо-данные
+        const demoProducts = await generateDemoProducts();
+        return res.status(200).json({
+          success: true,
+          message: 'FashionAI API is working! Test mode.',
+          products: demoProducts,
+          query: query || 'test query',
+          total: demoProducts.length
+        });
+      }
+      
+      if (query) {
+        // Выполняем поиск по GET параметру
+        console.log('🔍 GET Search query:', query);
+        const aiAnalysis = await analyzeWithDeepSeek(query);
+        const products = await generateProductsWithAI(aiAnalysis, query);
+        const assistantResponse = await generateAssistantResponse(query, products, aiAnalysis);
+        
+        return res.status(200).json({
+          success: true,
+          products: products,
+          ai_analysis: aiAnalysis,
+          assistant_response: assistantResponse,
+          query: query,
+          total: products.length,
+          message: 'GET search completed successfully'
+        });
+      }
+      
+      // Простой статус API
+      return res.status(200).json({
+        success: true,
+        message: '🎯 FashionAI API is working!',
+        version: '1.0',
+        endpoints: {
+          'GET /api/search': 'API status and simple search',
+          'GET /api/search?query=джинсы': 'Search with query parameter',
+          'GET /api/search?test=true': 'Test mode with demo data',
+          'POST /api/search': 'Advanced search with AI analysis'
+        },
+        usage: {
+          get: 'Send GET request with query parameter: /api/search?query=джинсы+до+5000',
+          post: 'Send POST request with JSON body: {"query": "джинсы до 5000"}'
+        },
+        example: {
+          query: "подбери джинсы до 5000 рублей"
+        },
+        timestamp: new Date().toISOString()
+      });
+      
+    } catch (error) {
+      console.error('❌ GET handler error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'API error',
+        message: error.message
       });
     }
+  }
 
-    console.log('🔍 AI Search query:', query);
+  // 🔥 ОБРАБОТКА POST ЗАПРОСОВ
+  if (req.method === 'POST') {
+    try {
+      const { query } = req.body;
 
-    // 🔥 НАСТОЯЩИЙ ИИ АНАЛИЗ
-    const aiAnalysis = await analyzeWithDeepSeek(query);
-    console.log('🤖 AI Analysis:', aiAnalysis);
+      if (!query) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Введите запрос для поиска одежды' 
+        });
+      }
 
-    // 🔥 ГЕНЕРАЦИЯ ТОВАРОВ НА ОСНОВЕ ИИ
-    const products = await generateProductsWithAI(aiAnalysis, query);
-    
-    // 🔥 ОТВЕТ ПОМОЩНИКА С ИИ
-    const assistantResponse = await generateAssistantResponse(query, products, aiAnalysis);
+      console.log('🔍 POST Search query:', query);
 
-    res.status(200).json({
-      success: true,
-      products: products,
-      ai_analysis: aiAnalysis,
-      assistant_response: assistantResponse,
-      query: query,
-      total: products.length,
-      message: 'AI поиск завершен успешно'
-    });
+      // 🔥 НАСТОЯЩИЙ ИИ АНАЛИЗ
+      const aiAnalysis = await analyzeWithDeepSeek(query);
+      console.log('🤖 AI Analysis:', aiAnalysis);
 
-  } catch (error) {
-    console.error('❌ DeepSeek AI error:', error);
-    
-    // Fallback на обычный поиск
-    const fallbackProducts = await fallbackSearch(req.body?.query || 'одежда');
-    const fallbackResponse = "Использую базовый поиск. AI временно недоступен.";
-    
-    res.status(200).json({
-      success: true,
-      products: fallbackProducts,
-      assistant_response: fallbackResponse,
-      query: req.body?.query,
-      total: fallbackProducts.length,
-      message: 'Базовый поиск (AI недоступен)'
+      // 🔥 ГЕНЕРАЦИЯ ТОВАРОВ НА ОСНОВЕ ИИ
+      const products = await generateProductsWithAI(aiAnalysis, query);
+      
+      // 🔥 ОТВЕТ ПОМОЩНИКА С ИИ
+      const assistantResponse = await generateAssistantResponse(query, products, aiAnalysis);
+
+      res.status(200).json({
+        success: true,
+        products: products,
+        ai_analysis: aiAnalysis,
+        assistant_response: assistantResponse,
+        query: query,
+        total: products.length,
+        message: 'AI поиск завершен успешно'
+      });
+
+    } catch (error) {
+      console.error('❌ DeepSeek AI error:', error);
+      
+      // Fallback на обычный поиск
+      const fallbackProducts = await fallbackSearch(req.body?.query || 'одежда');
+      const fallbackResponse = "Использую базовый поиск. AI временно недоступен.";
+      
+      res.status(200).json({
+        success: true,
+        products: fallbackProducts,
+        assistant_response: fallbackResponse,
+        query: req.body?.query,
+        total: fallbackProducts.length,
+        message: 'Базовый поиск (AI недоступен)'
+      });
+    }
+  } else {
+    return res.status(405).json({ 
+      success: false,
+      error: 'Method not allowed' 
     });
   }
 }
@@ -419,4 +502,39 @@ function analyzeWithRules(userQuery) {
 async function fallbackSearch(query) {
   const analysis = analyzeWithRules(query);
   return generateProductsWithAI(analysis, query);
+}
+
+// 🎯 ДЕМО-ДАННЫЕ ДЛЯ ТЕСТИРОВАНИЯ
+async function generateDemoProducts() {
+  const stores = [
+    { name: 'Lamoda', color: '#00a046', domain: 'lamoda.ru' },
+    { name: 'Wildberries', color: '#a50034', domain: 'wildberries.ru' },
+    { name: 'OZON', color: '#005bff', domain: 'ozon.ru' }
+  ];
+  
+  const products = [];
+  
+  for (let i = 0; i < 4; i++) {
+    const store = stores[i % stores.length];
+    const product = {
+      id: `demo_${i}`,
+      title: i === 0 ? 'Джинсы Nike Classic' : 
+             i === 1 ? 'Футболка Adidas Original' : 
+             i === 2 ? 'Куртка Columbia Winter' : 'Платье Zara Summer',
+      price: [3499, 1899, 7999, 2999][i],
+      oldPrice: i === 2 ? 9999 : null,
+      image: `https://source.unsplash.com/300x200/?${['jeans', 't-shirt', 'jacket', 'dress'][i]}`,
+      link: `https://${store.domain}/product/demo-${i}`,
+      store: store.name,
+      storeColor: store.color,
+      rating: '4.' + (2 + i),
+      reviews: [156, 289, 78, 432][i],
+      inStock: true,
+      ai_generated: false,
+      ai_relevance: 0.9 - (i * 0.1)
+    };
+    products.push(product);
+  }
+  
+  return products;
 }
