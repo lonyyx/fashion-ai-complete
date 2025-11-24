@@ -145,7 +145,7 @@ export default async function handler(req, res) {
 // 🔥 ОСНОВНАЯ ФУНКЦИЯ ИИ АНАЛИЗА
 async function analyzeWithDeepSeek(userQuery) {
   // Если API ключа нет, используем fallback
-  if (!DEEPSEEK_API_KEY || DEEPSEEK_API_KEY === 'your_deepseek_key_here') {
+  if (!DEEPSEEK_API_KEY || DEEPSEEK_API_KEY === 'sk-09cf035460ce4448bbd6357a9fbfb702') {
     console.log('⚠️ Using fallback analysis (no API key)');
     return analyzeWithRules(userQuery);
   }
@@ -272,7 +272,7 @@ async function generateAIProduct(aiAnalysis, index, originalQuery) {
 // 🔥 ГЕНЕРАЦИЯ ОТВЕТА ПОМОЩНИКА С ИИ
 async function generateAssistantResponse(userQuery, products, aiAnalysis) {
   // Если API ключа нет, используем простой ответ
-  if (!DEEPSEEK_API_KEY || DEEPSEEK_API_KEY === 'your_deepseek_key_here') {
+  if (!DEEPSEEK_API_KEY || DEEPSEEK_API_KEY === 'sk-09cf035460ce4448bbd6357a9fbfb702') {
     return `На основе вашего запроса "${userQuery}" я нашёл ${products.length} подходящих вариантов. Все товары соответствуют вашим критериям поиска.`;
   }
 
