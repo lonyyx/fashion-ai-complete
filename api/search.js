@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // DeepSeek API настройки
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const DEEPSEEK_API_KEY = process.env.sk-09cf035460ce4448bbd6357a9fbfb702;
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 
 export default async function handler(req, res) {
@@ -84,7 +84,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // 🔥 ОБРАБОТКА POST ЗАПРОСОВ
+  
   if (req.method === 'POST') {
     try {
       const { query } = req.body;
