@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FashionAI - Умный поиск одежды</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f8f9fa;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            padding: 40px 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .search-section {
+            background-color: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+        
+        .input-group {
+            display: flex;
+            margin-bottom: 15px;
+        }
+        
+        #search-input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px 0 0 8px;
+            font-size: 16px;
+        }
+        
+        #search-button {
+            background-color: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            border-radius: 0 8px 8px 0;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        .examples {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .example {
+            background-color: #f0f0f0;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .example:hover {
+            background-color: #667eea;
+            color: white;
+        }
+        
+        .ai-response {
+            background-color: #f0f7ff;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        
+        .product-card {
+            background-color: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+        }
+        
+        .product-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .product-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        
+        .product-info {
+            padding: 15px;
+        }
+        
+        .product-title {
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+        }
+        
+        .product-price {
+            font-weight: bold;
+            color: #667eea;
+            font-size: 1.2rem;
+            margin-bottom: 8px;
+        }
+        
+        .product-old-price {
+            text-decoration: line-through;
+            color: #999;
+            font-size: 0.9rem;
+        }
+        
+        .product-store {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+        }
+        
+        .store-badge {
+            background-color: #667eea;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error-message {
+            background-color: #ffe6e6;
+            color: #d63031;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>FashionAI</h1>
+            <p class="subtitle">Умный поиск одежды с искусственным интеллектом</p>
+        </header>
+        
+        <section class="search-section">
+            <div class="input-group">
+                <input type="text" id="search-input" placeholder="Например: подбери мне джинсы до 5000 рублей">
+                <button id="search-button">Найти</button>
+            </div>
+            
+            <div class="examples">
+                <div class="example">Джинсы до 4000 рублей</div>
+                <div class="example">Теплая куртка на зиму</div>
+                <div class="example">Спортивные футболки</div>
+                <div class="example">Летнее платье до 3000</div>
+            </div>
+            
+            <div class="error-message" id="error-message"></div>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Ищу подходящие товары с помощью AI...</p>
+            </div>
+        </section>
+        
+        <div id="ai-response-container"></div>
+        
+        <div class="products-grid" id="products-grid"></div>
+    </div>
+
+    <script>
+        const API_URL = '/api/search';
+        
+        document.getElementById('search-button').addEventListener('click', search);
+        document.getElementById('search-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') search();
+        });
+        
+        document.querySelectorAll('.example').forEach(example => {
+            example.addEventListener('click', function() {
+                document.getElementById('search-input').value = this.textContent;
+                search();
+            });
+        });
+
+        async function search() {
+            const query = document.getElementById('search-input').value.trim();
+            const loading = document.getElementById('loading');
+            const errorMsg = document.getElementById('error-message');
+            const grid = document.getElementById('products-grid');
+            const aiContainer = document.getElementById('ai-response-container');
+            
+            if (!query) {
+                showError('Введите запрос для поиска');
+                return;
+            }
+            
+            errorMsg.style.display = 'none';
+            aiContainer.innerHTML = '';
+            grid.innerHTML = '';
+            loading.style.display = 'block';
+            
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ query: query })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Ошибка API: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    if (data.assistant_response) {
+                        showAIResponse(data.assistant_response);
+                    }
+                    
+                    displayProducts(data.products);
+                } else {
+                    throw new Error(data.error || 'Неизвестная ошибка');
+                }
+                
+            } catch (error) {
+                showError('Ошибка при поиске: ' + error.message);
+                showDemoResults();
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        function showAIResponse(message) {
+            const container = document.getElementById('ai-response-container');
+            container.innerHTML = `
+                <div class="ai-response">
+                    <h3>🤖 AI Помощник:</h3>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        function displayProducts(products) {
+            const grid = document.getElementById('products-grid');
+            
+            if (products.length === 0) {
+                grid.innerHTML = '<p>Товары не найдены. Попробуйте изменить запрос.</p>';
+                return;
+            }
+            
+            products.forEach(product => {
+                const card = document.createElement('div');
+                card.className = 'product-card';
+                
+                const discountBadge = product.oldPrice ? 
+                    `<div style="position: absolute; top: 10px; right: 10px; background: #ff4757; color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px;">
+                        -${Math.round((1 - product.price / product.oldPrice) * 100)}%
+                    </div>` : '';
+                
+                const oldPrice = product.oldPrice ? 
+                    `<div class="product-old-price">${product.oldPrice} ₽</div>` : '';
+                
+                card.innerHTML = `
+                    <div style="position: relative;">
+                        <img src="${product.image}" alt="${product.title}" class="product-image">
+                        ${discountBadge}
+                    </div>
+                    <div class="product-info">
+                        <h3 class="product-title">${product.title}</h3>
+                        ${oldPrice}
+                        <div class="product-price">${product.price} ₽</div>
+                        <div class="product-store">
+                            <span class="store-badge" style="background: ${product.storeColor}">${product.store}</span>
+                            <span>★ ${product.rating} (${product.reviews})</span>
+                        </div>
+                        <a href="${product.link}" target="_blank" 
+                           style="display: block; text-align: center; background: #667eea; color: white; 
+                                  padding: 10px; border-radius: 8px; text-decoration: none; margin-top: 10px;">
+                           Посмотреть в магазине
+                        </a>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function showError(message) {
+            const errorMsg = document.getElementById('error-message');
+            errorMsg.textContent = message;
+            errorMsg.style.display = 'block';
+        }
+
+        function showDemoResults() {
+            const products = [
+                {
+                    title: 'Джинсы Nike Classic',
+                    price: 3499,
+                    image: 'https://source.unsplash.com/300x200/?jeans,nike',
+                    store: 'Lamoda',
+                    storeColor: '#00a046',
+                    rating: '4.2',
+                    reviews: 156,
+                    link: 'https://lamoda.ru'
+                },
+                {
+                    title: 'Футболка Adidas Original',
+                    price: 1899,
+                    image: 'https://source.unsplash.com/300x200/?t-shirt,adidas',
+                    store: 'Wildberries', 
+                    storeColor: '#a50034',
+                    rating: '4.5',
+                    reviews: 289,
+                    link: 'https://wildberries.ru'
+                }
+            ];
+            displayProducts(products);
+        }
+    </script>
+</body>
+</html>
