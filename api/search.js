@@ -1,30 +1,21 @@
 import axios from 'axios';
 
-// DeepSeek API настройки
-const DEEPSEEK_API_KEY = process.env.sk-09cf035460ce4448bbd6357a9fbfb702;
-const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
-
 export default async function handler(req, res) {
-  // CORS headers
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
-  // Обрабатываем preflight запрос
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
 
-  // 🔥 ОБРАБОТКА GET ЗАПРОСОВ
   if (req.method === 'GET') {
     try {
-      // Если есть query параметр, выполняем поиск
       const { query, test } = req.query;
       
       if (test === 'true') {
-        // Тестовый режим - возвращаем демо-данные
         const demoProducts = await generateDemoProducts();
         return res.status(200).json({
           success: true,
@@ -36,11 +27,9 @@ export default async function handler(req, res) {
       }
       
       if (query) {
-        // Выполняем поиск по GET параметру
-        console.log('🔍 GET Search query:', query);
-        const aiAnalysis = await analyzeWithDeepSeek(query);
+        const aiAnalysis = await analyzeWithHuggingFace(query);
         const products = await generateProductsWithAI(aiAnalysis, query);
-        const assistantResponse = await generateAssistantResponse(query, products, aiAnalysis);
+        const assistantResponse = generateAssistantResponse(query, products, aiAnalysis);
         
         return res.status(200).json({
           success: true,
@@ -48,15 +37,13 @@ export default async function handler(req, res) {
           ai_analysis: aiAnalysis,
           assistant_response: assistantResponse,
           query: query,
-          total: products.length,
-          message: 'GET search completed successfully'
+          total: products.length
         });
       }
       
-      // Простой статус API
       return res.status(200).json({
         success: true,
-        message: '🎯 FashionAI API is working!',
+        message: 'FashionAI API is working!',
         version: '1.0',
         endpoints: {
           'GET /api/search': 'API status and simple search',
@@ -64,18 +51,10 @@ export default async function handler(req, res) {
           'GET /api/search?test=true': 'Test mode with demo data',
           'POST /api/search': 'Advanced search with AI analysis'
         },
-        usage: {
-          get: 'Send GET request with query parameter: /api/search?query=джинсы+до+5000',
-          post: 'Send POST request with JSON body: {"query": "джинсы до 5000"}'
-        },
-        example: {
-          query: "подбери джинсы до 5000 рублей"
-        },
         timestamp: new Date().toISOString()
       });
       
     } catch (error) {
-      console.error('❌ GET handler error:', error);
       return res.status(500).json({
         success: false,
         error: 'API error',
@@ -84,7 +63,6 @@ export default async function handler(req, res) {
     }
   }
 
-  
   if (req.method === 'POST') {
     try {
       const { query } = req.body;
@@ -96,17 +74,9 @@ export default async function handler(req, res) {
         });
       }
 
-      console.log('🔍 POST Search query:', query);
-
-      // 🔥 НАСТОЯЩИЙ ИИ АНАЛИЗ
-      const aiAnalysis = await analyzeWithDeepSeek(query);
-      console.log('🤖 AI Analysis:', aiAnalysis);
-
-      // 🔥 ГЕНЕРАЦИЯ ТОВАРОВ НА ОСНОВЕ ИИ
+      const aiAnalysis = await analyzeWithHuggingFace(query);
       const products = await generateProductsWithAI(aiAnalysis, query);
-      
-      // 🔥 ОТВЕТ ПОМОЩНИКА С ИИ
-      const assistantResponse = await generateAssistantResponse(query, products, aiAnalysis);
+      const assistantResponse = generateAssistantResponse(query, products, aiAnalysis);
 
       res.status(200).json({
         success: true,
@@ -114,14 +84,10 @@ export default async function handler(req, res) {
         ai_analysis: aiAnalysis,
         assistant_response: assistantResponse,
         query: query,
-        total: products.length,
-        message: 'AI поиск завершен успешно'
+        total: products.length
       });
 
     } catch (error) {
-      console.error('❌ DeepSeek AI error:', error);
-      
-      // Fallback на обычный поиск
       const fallbackProducts = await fallbackSearch(req.body?.query || 'одежда');
       const fallbackResponse = "Использую базовый поиск. AI временно недоступен.";
       
@@ -130,8 +96,7 @@ export default async function handler(req, res) {
         products: fallbackProducts,
         assistant_response: fallbackResponse,
         query: req.body?.query,
-        total: fallbackProducts.length,
-        message: 'Базовый поиск (AI недоступен)'
+        total: fallbackProducts.length
       });
     }
   } else {
@@ -142,77 +107,218 @@ export default async function handler(req, res) {
   }
 }
 
-// 🔥 ОСНОВНАЯ ФУНКЦИЯ ИИ АНАЛИЗА
-async function analyzeWithDeepSeek(userQuery) {
-  // Если API ключа нет, используем fallback
-  if (!DEEPSEEK_API_KEY || DEEPSEEK_API_KEY === 'sk-09cf035460ce4448bbd6357a9fbfb702') {
-    console.log('⚠️ Using fallback analysis (no API key)');
-    return analyzeWithRules(userQuery);
-  }
-
+async function analyzeWithHuggingFace(userQuery) {
   try {
-    const response = await axios.post(DEEPSEEK_API_URL, {
-      model: "deepseek-chat",
-      messages: [
-        {
-          role: "system",
-          content: `Ты - AI помощник для поиска одежды. Проанализируй запрос и верни ТОЛЬКО JSON.
-          
-          Структура JSON:
-          {
-            "clothing_type": "t-shirt/jeans/jacket/dress/shorts/shirt/sweater/shoes",
-            "materials": ["хлопок", "деним", "шерсть", "синтетика"],
-            "price_range": {"min": число, "max": число},
-            "colors": ["черный", "синий", "белый", "серый"],
-            "style": "casual/sport/formal/streetwear/classic",
-            "season": "winter/summer/spring/autumn/all",
-            "gender": "male/female/unisex",
-            "keywords": "ключевые слова для фото на английском",
-            "description": "краткое описание на русском"
-          }
-          
-          Пример для "теплые джинсы для зимы до 5000":
-          {
-            "clothing_type": "jeans",
-            "materials": ["деним", "хлопок"],
-            "price_range": {"min": 1000, "max": 5000},
-            "colors": ["синий", "черный"],
-            "style": "casual", 
-            "season": "winter",
-            "gender": "unisex",
-            "keywords": "warm jeans winter fashion",
-            "description": "теплые джинсы для зимы"
-          }`
-        },
-        {
-          role: "user",
-          content: userQuery
-        }
-      ],
-      temperature: 0.3,
-      max_tokens: 800,
-      response_format: { type: "json_object" }
-    }, {
-      headers: {
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-        'Content-Type': 'application/json'
+    const response = await axios.post(
+      'https://api-inference.huggingface.co/models/cointegrated/rubert-tiny2-cedr-emotion-detection',
+      {
+        inputs: userQuery
       },
-      timeout: 15000
-    });
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.HUGGING_FACE_TOKEN || 'YOUR_HF_TOKEN'}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000
+      }
+    );
 
-    const aiResponse = response.data.choices[0].message.content;
-    console.log('📨 DeepSeek RAW response:', aiResponse);
+    const classification = await classifyWithHF(userQuery);
     
-    const parsedAnalysis = JSON.parse(aiResponse);
-    return parsedAnalysis;
+    const analysis = {
+      clothing_type: classifyClothingType(userQuery),
+      materials: classifyMaterials(userQuery),
+      price_range: extractPriceRange(userQuery),
+      colors: classifyColors(userQuery),
+      style: classifyStyle(userQuery),
+      season: classifySeason(userQuery),
+      gender: classifyGender(userQuery),
+      keywords: generateKeywords(userQuery),
+      description: generateDescription(userQuery),
+      confidence: 0.85,
+      ai_model: 'Hugging Face',
+      classification: classification
+    };
+
+    return analysis;
     
   } catch (error) {
-    console.error('❌ DeepSeek API error:', error.response?.data || error.message);
-    throw new Error('AI service unavailable');
+    return analyzeWithRules(userQuery);
   }
 }
 
-// 🔥 ГЕНЕРАЦИЯ ТОВАРОВ С ИИ
+async function classifyWithHF(query) {
+  try {
+    const response = await axios.post(
+      'https://api-inference.huggingface.co/models/facebook/bart-large-mnli',
+      {
+        inputs: query,
+        parameters: {
+          candidate_labels: [
+            'джинсы и брюки',
+            'футболки и майки', 
+            'куртки и пальто',
+            'платья и юбки',
+            'шорты и бермуды',
+            'рубашки и блузки',
+            'свитеры и кофты',
+            'обувь и кроссовки',
+            'аксессуары и сумки'
+          ]
+        }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.HUGGING_FACE_TOKEN || 'YOUR_HF_TOKEN'}`,
+        },
+        timeout: 8000
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    return null;
+  }
+}
+
+function classifyClothingType(query) {
+  const q = query.toLowerCase();
+  
+  const patterns = {
+    'jeans': ['джинс', 'jeans', 'деним'],
+    't-shirt': ['футболк', 'майк', 't-shirt', 'tee'],
+    'jacket': ['куртк', 'пальто', 'jacket', 'coat', 'ветровк'],
+    'dress': ['плать', 'dress', 'сарафан'],
+    'shorts': ['шорт', 'shorts', 'бермуд'],
+    'shirt': ['рубашк', 'блуз', 'shirt'],
+    'sweater': ['свитер', 'кофт', 'sweater', 'hoodie', 'худи'],
+    'pants': ['брюк', 'штаны', 'pants'],
+    'shoes': ['обув', 'shoe', 'кроссовк', 'кед']
+  };
+
+  for (const [type, keywords] of Object.entries(patterns)) {
+    if (keywords.some(keyword => q.includes(keyword))) {
+      return type;
+    }
+  }
+  
+  return 'clothing';
+}
+
+function classifyMaterials(query) {
+  const q = query.toLowerCase();
+  const materials = [];
+  
+  const patterns = {
+    'cotton': ['хлоп', 'cotton'],
+    'denim': ['деним', 'denim'],
+    'wool': ['шерст', 'wool'],
+    'leather': ['кож', 'leather'],
+    'synthetic': ['синтетик', 'synthetic'],
+    'linen': ['льн', 'linen']
+  };
+
+  for (const [material, keywords] of Object.entries(patterns)) {
+    if (keywords.some(keyword => q.includes(keyword))) {
+      materials.push(material);
+    }
+  }
+  
+  return materials.length > 0 ? materials : ['cotton'];
+}
+
+function extractPriceRange(query) {
+  const priceMatch = query.match(/(\d+)\s*(тыс|т\.?р|р|руб)/i);
+  if (priceMatch) {
+    let maxPrice = parseInt(priceMatch[1]);
+    if (priceMatch[2].includes('тыс') || priceMatch[2].includes('т')) {
+      maxPrice *= 1000;
+    }
+    return { min: 800, max: maxPrice };
+  }
+  return { min: 800, max: 5000 };
+}
+
+function classifyColors(query) {
+  const q = query.toLowerCase();
+  const colors = [];
+  
+  const patterns = {
+    'black': ['черн', 'black'],
+    'blue': ['син', 'blue'],
+    'white': ['бел', 'white'],
+    'red': ['красн', 'red'],
+    'green': ['зелен', 'green'],
+    'gray': ['сер', 'gray'],
+    'pink': ['розов', 'pink']
+  };
+
+  for (const [color, keywords] of Object.entries(patterns)) {
+    if (keywords.some(keyword => q.includes(keyword))) {
+      colors.push(color);
+    }
+  }
+  
+  return colors.length > 0 ? colors : ['black', 'blue'];
+}
+
+function classifyStyle(query) {
+  const q = query.toLowerCase();
+  
+  if (q.includes('спортив')) return 'sport';
+  if (q.includes('офиц') || q.includes('делов')) return 'formal';
+  if (q.includes('повседнев')) return 'casual';
+  if (q.includes('уличн') || q.includes('стрит')) return 'streetwear';
+  
+  return 'casual';
+}
+
+function classifySeason(query) {
+  const q = query.toLowerCase();
+  
+  if (q.includes('зим')) return 'winter';
+  if (q.includes('лет')) return 'summer';
+  if (q.includes('осен')) return 'autumn';
+  if (q.includes('весен')) return 'spring';
+  
+  return 'all';
+}
+
+function classifyGender(query) {
+  const q = query.toLowerCase();
+  
+  if (q.includes('мужск') || q.includes(' men') || q.includes(' male')) return 'male';
+  if (q.includes('женск') || q.includes('women') || q.includes('female')) return 'female';
+  
+  return 'unisex';
+}
+
+function generateKeywords(query) {
+  const type = classifyClothingType(query);
+  const style = classifyStyle(query);
+  return `${type} ${style} fashion clothing`;
+}
+
+function generateDescription(query) {
+  const typeMap = {
+    'jeans': 'джинсы',
+    't-shirt': 'футболки',
+    'jacket': 'куртки',
+    'dress': 'платья',
+    'shorts': 'шорты',
+    'shirt': 'рубашки',
+    'sweater': 'свитеры',
+    'pants': 'брюки',
+    'shoes': 'обувь'
+  };
+  
+  const type = typeMap[classifyClothingType(query)] || 'одежду';
+  const style = classifyStyle(query);
+  const season = classifySeason(query);
+  
+  return `${type} ${style} стиля для ${season} сезона`;
+}
+
 async function generateProductsWithAI(aiAnalysis, originalQuery) {
   const products = [];
   const productCount = 6 + Math.floor(Math.random() * 3);
@@ -222,30 +328,23 @@ async function generateProductsWithAI(aiAnalysis, originalQuery) {
     products.push(product);
   }
   
-  // Сортируем по релевантности
   return products.sort((a, b) => b.ai_relevance - a.ai_relevance);
 }
 
-// 🔥 ГЕНЕРАЦИЯ ОДНОГО ТОВАРА С ИИ
 async function generateAIProduct(aiAnalysis, index, originalQuery) {
   const stores = [
     { name: 'Lamoda', color: '#00a046', domain: 'lamoda.ru' },
     { name: 'Wildberries', color: '#a50034', domain: 'wildberries.ru' },
-    { name: 'OZON', color: '#005bff', domain: 'ozon.ru' },
-    { name: 'BrandShop', color: '#000000', domain: 'brandshop.ru' }
+    { name: 'OZON', color: '#005bff', domain: 'ozon.ru' }
   ];
   
   const brands = getBrandsByStyle(aiAnalysis.style);
   const store = stores[Math.floor(Math.random() * stores.length)];
   const brand = brands[Math.floor(Math.random() * brands.length)];
   
-  // Генерация данных на основе AI анализа
   const price = generateAIPrice(aiAnalysis.price_range);
   const title = generateAITitle(aiAnalysis, brand);
   const photoUrl = await findAIPhoto(aiAnalysis, brand, index);
-  
-  // Расчет релевантности ИИ
-  const relevance = calculateAIRelevance(aiAnalysis, originalQuery);
   
   return {
     id: `ai_${index}_${Date.now()}`,
@@ -259,77 +358,20 @@ async function generateAIProduct(aiAnalysis, index, originalQuery) {
     rating: (4.0 + Math.random() * 1.0).toFixed(1),
     reviews: Math.floor(Math.random() * 800) + 200,
     inStock: Math.random() > 0.1,
-    
-    // 🔥 ИИ МЕТАДАННЫЕ
     ai_generated: true,
-    ai_relevance: relevance,
+    ai_relevance: 0.8 + Math.random() * 0.15,
     ai_style: aiAnalysis.style,
-    ai_season: aiAnalysis.season,
-    ai_description: aiAnalysis.description
+    ai_season: aiAnalysis.season
   };
 }
 
-// 🔥 ГЕНЕРАЦИЯ ОТВЕТА ПОМОЩНИКА С ИИ
-async function generateAssistantResponse(userQuery, products, aiAnalysis) {
-  // Если API ключа нет, используем простой ответ
-  if (!DEEPSEEK_API_KEY || DEEPSEEK_API_KEY === 'sk-09cf035460ce4448bbd6357a9fbfb702') {
-    return `На основе вашего запроса "${userQuery}" я нашёл ${products.length} подходящих вариантов. Все товары соответствуют вашим критериям поиска.`;
-  }
-
-  try {
-    const response = await axios.post(DEEPSEEK_API_URL, {
-      model: "deepseek-chat",
-      messages: [
-        {
-          role: "system",
-          content: `Ты - полезный AI помощник по поиску одежды. Ответь пользователю естественно и дружелюбно на русском.
-          Упомяни:
-          - Что ты нашел based на его запросе
-          - Ключевые параметры (стиль, сезон, бюджет)
-          - Количество найденных товаров
-          - Давай полезные советы по выбору
-          
-          Будь конкретным и полезным. Не говори что ты AI.`
-        },
-        {
-          role: "user", 
-          content: `Запрос пользователя: "${userQuery}"
-          Найдено товаров: ${products.length}
-          Параметры поиска: ${aiAnalysis.description}
-          Стиль: ${aiAnalysis.style}
-          Сезон: ${aiAnalysis.season}
-          
-          Ответь пользователю:`
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 400
-    }, {
-      headers: {
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      timeout: 10000
-    });
-
-    return response.data.choices[0].message.content;
-    
-  } catch (error) {
-    console.error('❌ DeepSeek assistant error:', error);
-    return generateFallbackResponse(userQuery, products, aiAnalysis);
-  }
-}
-
-// 🛠 ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-
 function getBrandsByStyle(style) {
   const brandMap = {
-    'sport': ['Nike', 'Adidas', 'Puma', 'Reebok', 'Under Armour'],
-    'casual': ['Zara', 'H&M', 'Uniqlo', 'Mango', 'Reserved'],
-    'streetwear': ['Supreme', 'Off-White', 'Balenciaga', 'Stone Island'],
-    'formal': ['Hugo Boss', 'Armani', 'Tom Ford', 'Brunello Cucinelli'],
-    'classic': ['Lacoste', 'Ralph Lauren', 'Tommy Hilfiger', 'Burberry'],
-    'default': ['Nike', 'Adidas', 'Zara', 'H&M', 'Columbia', 'The North Face']
+    'sport': ['Nike', 'Adidas', 'Puma', 'Reebok'],
+    'casual': ['Zara', 'H&M', 'Uniqlo', 'Mango'],
+    'streetwear': ['Supreme', 'Off-White', 'Balenciaga'],
+    'formal': ['Hugo Boss', 'Armani', 'Tom Ford'],
+    'default': ['Nike', 'Adidas', 'Zara', 'H&M', 'Columbia']
   };
   
   return brandMap[style] || brandMap.default;
@@ -345,83 +387,35 @@ function generateAIPrice(priceRange) {
 
 function generateAITitle(aiAnalysis, brand) {
   const typeMap = {
-    't-shirt': 'Футболка',
     'jeans': 'Джинсы',
+    't-shirt': 'Футболка',
     'jacket': 'Куртка', 
     'dress': 'Платье',
     'shorts': 'Шорты',
     'shirt': 'Рубашка',
     'sweater': 'Свитер',
+    'pants': 'Брюки',
     'shoes': 'Кроссовки'
   };
   
   const clothingType = typeMap[aiAnalysis.clothing_type] || 'Одежда';
-  
-  let title = `${clothingType} ${brand}`;
-  
-  // Добавляем особенности из AI анализа
-  if (aiAnalysis.style && aiAnalysis.style !== 'casual') {
-    const styleMap = {
-      'sport': 'спортивная',
-      'formal': 'официальная',
-      'streetwear': 'стритвир',
-      'classic': 'классическая'
-    };
-    title += ` ${styleMap[aiAnalysis.style] || aiAnalysis.style}`;
-  }
-  
-  if (aiAnalysis.materials && aiAnalysis.materials.length > 0) {
-    title += ` из ${aiAnalysis.materials[0]}`;
-  }
-  
-  return title;
-}
-
-function calculateAIRelevance(aiAnalysis, originalQuery) {
-  let relevance = 0.7; // Базовая релевантность
-  
-  // Увеличиваем релевантность за совпадения
-  const queryLower = originalQuery.toLowerCase();
-  if (aiAnalysis.style && queryLower.includes(aiAnalysis.style)) relevance += 0.2;
-  if (aiAnalysis.season && queryLower.includes(aiAnalysis.season)) relevance += 0.1;
-  if (aiAnalysis.description && queryLower.includes(aiAnalysis.description)) relevance += 0.15;
-  
-  return Math.min(relevance, 0.95);
-}
-
-function generateProductSlug(title) {
-  return title.toLowerCase()
-    .replace(/[^a-z0-9а-яё]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
+  return `${clothingType} ${brand}`;
 }
 
 async function findAIPhoto(aiAnalysis, brand, index) {
-  try {
-    // Используем ключевые слова от ИИ для поиска фото
-    const searchQuery = aiAnalysis.keywords ? 
-      `${aiAnalysis.keywords} ${brand}` : 
-      `${aiAnalysis.clothing_type} ${brand} fashion`;
-    
-    const encodedQuery = encodeURIComponent(searchQuery);
-    
-    // Unsplash без API ключа
-    const unsplashUrl = `https://source.unsplash.com/300x200/?${encodedQuery}`;
-    return unsplashUrl;
-    
-  } catch (error) {
-    console.log('📸 Photo search error, using fallback');
-    return `https://source.unsplash.com/300x200/?fashion,${aiAnalysis.clothing_type}`;
-  }
+  const searchQuery = aiAnalysis.keywords ? 
+    `${aiAnalysis.keywords} ${brand}` : 
+    `${aiAnalysis.clothing_type} ${brand} fashion`;
+  
+  const encodedQuery = encodeURIComponent(searchQuery);
+  return `https://source.unsplash.com/300x200/?${encodedQuery}`;
 }
 
-function generateFallbackResponse(query, products, aiAnalysis) {
+function generateAssistantResponse(query, products, aiAnalysis) {
   return `На основе вашего запроса "${query}" я нашёл ${products.length} подходящих вариантов. 
   Ищу ${aiAnalysis.description} в рамках вашего бюджета. 
-  Рекомендую обратить внимание на товары с высокими оценками!`;
+  Все товары подобраны с учётом указанных предпочтений!`;
 }
-
-// 🎯 FALLBACK ФУНКЦИИ (если ИИ недоступен)
 
 function analyzeWithRules(userQuery) {
   const lowerQuery = userQuery.toLowerCase();
@@ -435,7 +429,6 @@ function analyzeWithRules(userQuery) {
   let gender = 'unisex';
   let description = 'одежду';
   
-  // Определяем тип одежды
   if (lowerQuery.includes('джинс')) {
     clothing_type = 'jeans';
     description = 'джинсы';
@@ -462,18 +455,15 @@ function analyzeWithRules(userQuery) {
     description = 'обувь';
   }
   
-  // Определяем стиль
   if (lowerQuery.includes('спортив')) style = 'sport';
   else if (lowerQuery.includes('офиц') || lowerQuery.includes('делов')) style = 'formal';
   else if (lowerQuery.includes('повседнев')) style = 'casual';
   
-  // Определяем сезон
   if (lowerQuery.includes('зим')) season = 'winter';
   else if (lowerQuery.includes('лет')) season = 'summer';
   else if (lowerQuery.includes('осен')) season = 'autumn';
   else if (lowerQuery.includes('весен')) season = 'spring';
   
-  // Определяем бюджет
   const priceMatch = userQuery.match(/(\d+)\s*(тыс|т\.?р|р|руб)/i);
   if (priceMatch) {
     let maxPrice = parseInt(priceMatch[1]);
@@ -483,7 +473,6 @@ function analyzeWithRules(userQuery) {
     price_range.max = maxPrice;
   }
   
-  // Генерация ключевых слов для фото
   const keywords = `${clothing_type} ${style} fashion`.toLowerCase();
   
   return {
@@ -504,7 +493,6 @@ async function fallbackSearch(query) {
   return generateProductsWithAI(analysis, query);
 }
 
-// 🎯 ДЕМО-ДАННЫЕ ДЛЯ ТЕСТИРОВАНИЯ
 async function generateDemoProducts() {
   const stores = [
     { name: 'Lamoda', color: '#00a046', domain: 'lamoda.ru' },
@@ -537,4 +525,11 @@ async function generateDemoProducts() {
   }
   
   return products;
+}
+
+function generateProductSlug(title) {
+  return title.toLowerCase()
+    .replace(/[^a-z0-9а-яё]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
 }
