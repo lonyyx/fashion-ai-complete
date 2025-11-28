@@ -100,6 +100,20 @@ export default async function handler(req, res) {
   }
 }
 
+function generateProductLink(store, productTitle, searchQuery) {
+  const encodedTitle = encodeURIComponent(productTitle);
+  const encodedQuery = encodeURIComponent(searchQuery);
+  
+  const storeLinks = {
+    'Lamoda': `https://www.lamoda.ru/catalogsearch/result/?q=${encodedQuery}`,
+    'Wildberries': `https://www.wildberries.ru/catalog?search=${encodedQuery}`,
+    'OZON': `https://www.ozon.ru/search/?text=${encodedQuery}&from_global=true`,
+    'BrandShop': `https://brandshop.ru/search/?q=${encodedQuery}`
+  };
+  
+  return storeLinks[store] || `https://www.google.com/search?q=${encodedTitle}+${store}`;
+}
+
 async function analyzeWithAI(userQuery) {
   try {
     const HF_TOKEN = process.env.HUGGING_FACE_TOKEN;
@@ -324,7 +338,7 @@ async function generateAIProduct(aiAnalysis, index, originalQuery) {
     price: price,
     oldPrice: Math.random() > 0.6 ? Math.floor(price * (1.2 + Math.random() * 0.3)) : null,
     image: photoUrl,
-    link: `https://${store.domain}/product/${generateProductSlug(title)}`,
+    link: generateProductLink(store.name, title, originalQuery),
     store: store.name,
     storeColor: store.color,
     rating: (4.0 + Math.random() * 1.0).toFixed(1),
@@ -547,7 +561,7 @@ async function generateDemoProducts() {
       price: item.price,
       oldPrice: i === 2 ? 9999 : (i === 4 ? 1999 : null),
       image: `https://source.unsplash.com/300x200/?${item.type}`,
-      link: `https://${store.domain}/product/demo-${i}`,
+      link: generateProductLink(store.name, item.title, item.type),
       store: store.name,
       storeColor: store.color,
       rating: '4.' + (2 + (i % 3)),
@@ -560,11 +574,4 @@ async function generateDemoProducts() {
   }
   
   return products;
-}
-
-function generateProductSlug(title) {
-  return title.toLowerCase()
-    .replace(/[^a-z0-9а-яё]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
 }
