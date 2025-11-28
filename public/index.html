@@ -4,6 +4,39 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FashionAI - Умный поиск одежды</title>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>FashionAI</h1>
+            <p class="subtitle">Умный поиск одежды с искусственным интеллектом</p>
+        </header>
+        
+        <section class="search-section">
+            <div class="input-group">
+                <input type="text" id="search-input" placeholder="Например: подбери мне джинсы до 5000 рублей">
+                <button id="search-button">Найти</button>
+            </div>
+            
+            <div class="examples">
+                <div class="example">Джинсы до 4000 рублей</div>
+                <div class="example">Теплая куртка на зиму</div>
+                <div class="example">Спортивные футболки</div>
+                <div class="example">Летнее платье до 3000</div>
+            </div>
+            
+            <div class="error-message" id="error-message"></div>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Ищу подходящие товары с помощью AI...</p>
+            </div>
+        </section>
+        
+        <div id="ai-response-container"></div>
+        
+        <div class="products-grid" id="products-grid"></div>
+    </div>
     <style>
         * {
             margin: 0;
@@ -192,42 +225,8 @@
             display: none;
         }
     </style>
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>FashionAI</h1>
-            <p class="subtitle">Умный поиск одежды с искусственным интеллектом</p>
-        </header>
-        
-        <section class="search-section">
-            <div class="input-group">
-                <input type="text" id="search-input" placeholder="Например: подбери мне джинсы до 5000 рублей">
-                <button id="search-button">Найти</button>
-            </div>
-            
-            <div class="examples">
-                <div class="example">Джинсы до 4000 рублей</div>
-                <div class="example">Теплая куртка на зиму</div>
-                <div class="example">Спортивные футболки</div>
-                <div class="example">Летнее платье до 3000</div>
-            </div>
-            
-            <div class="error-message" id="error-message"></div>
-            
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <p>Ищу подходящие товары с помощью AI...</p>
-            </div>
-        </section>
-        
-        <div id="ai-response-container"></div>
-        
-        <div class="products-grid" id="products-grid"></div>
-    </div>
 
     <script>
-        // API на том же домене!
         const API_URL = '/api/search';
         
         document.getElementById('search-button').addEventListener('click', search);
@@ -254,7 +253,6 @@
                 return;
             }
             
-            // Сброс
             errorMsg.style.display = 'none';
             aiContainer.innerHTML = '';
             grid.innerHTML = '';
@@ -276,19 +274,16 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    // Показываем ответ AI
                     if (data.assistant_response) {
                         showAIResponse(data.assistant_response);
                     }
                     
-                    // Показываем товары
                     displayProducts(data.products);
                 } else {
                     throw new Error(data.error || 'Неизвестная ошибка');
                 }
                 
             } catch (error) {
-                console.error('Search error:', error);
                 showError('Ошибка при поиске: ' + error.message);
                 showDemoResults();
             } finally {
